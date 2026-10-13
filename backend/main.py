@@ -50,6 +50,29 @@ def verify_admin(x_admin_key: Optional[str] = Header(None, alias="x-admin-key"))
         raise HTTPException(status_code=401, detail="Unauthorized Access")
     return True
 
+# Dedicated Field Crew Key for on-site personnel
+FIELD_CREW_KEY = os.getenv("FIELD_CREW_KEY", "FIELD-CREW-KEY").strip()
+
+def verify_field_or_admin(
+    x_field_crew_key: Optional[str] = Header(None, alias="x-field-crew-key"),
+    x_admin_key: Optional[str] = Header(None, alias="x-admin-key"),
+):
+    # Check Admin authorization
+    if ADMIN_ACCESS_KEY and x_admin_key and x_admin_key.strip() == ADMIN_ACCESS_KEY:
+        return True
+
+    # Check Field Crew authorization
+    if FIELD_CREW_KEY:
+        if x_field_crew_key and x_field_crew_key.strip() == FIELD_CREW_KEY:
+            return True
+        if x_admin_key and x_admin_key.strip() == FIELD_CREW_KEY:
+            return True
+
+    raise HTTPException(
+        status_code=401,
+        detail="Unauthorized: Valid field crew or admin credentials required"
+    )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. AUTHENTIC CROWD MOVEMENT (DinoFun World VAST Challenge Dataset Integration)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -945,7 +968,11 @@ async def report_incident(payload: IncidentCreate):
 
 @app.patch("/api/incident/{incident_id}/status", tags=["Incidents"])
 @app.post("/api/incident/{incident_id}/status", tags=["Incidents"])
-async def update_incident_status_endpoint(incident_id: str, payload: IncidentStatusUpdate):
+async def update_incident_status_endpoint(
+    incident_id: str,
+    payload: IncidentStatusUpdate,
+    is_authorized: bool = Depends(verify_field_or_admin)
+):
     updated = await db_manager.update_incident_status(
         incident_id,
         payload.status,
@@ -964,7 +991,8 @@ async def update_incident_status_endpoint(incident_id: str, payload: IncidentSta
 async def resolve_incident_endpoint(
     incident_id: str,
     payload: Optional[IncidentStatusUpdate] = None,
-    coordinator: Optional[str] = None
+    coordinator: Optional[str] = None,
+    is_authorized: bool = Depends(verify_field_or_admin)
 ):
     coord_name = (payload and payload.coordinator_name) or coordinator or "Zone Coordinator"
     res_notes = (payload and payload.resolution_notes) or None

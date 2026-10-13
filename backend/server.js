@@ -21,6 +21,7 @@ app.use((req, res, next) => {
 
 // ─────────────────────── Security & Auth ───────────────────────
 const ADMIN_ACCESS_KEY = (process.env.ADMIN_KEY || '').trim();
+const FIELD_CREW_KEY = (process.env.FIELD_CREW_KEY || 'FIELD-CREW-KEY').trim();
 
 function verifyAdmin(req, res, next) {
   const adminKey = req.headers['x-admin-key'];
@@ -28,6 +29,26 @@ function verifyAdmin(req, res, next) {
     return res.status(401).json({ detail: 'Unauthorized Access' });
   }
   next();
+}
+
+function verifyFieldOrAdmin(req, res, next) {
+  const adminKey = req.headers['x-admin-key'];
+  const fieldKey = req.headers['x-field-crew-key'];
+
+  if (ADMIN_ACCESS_KEY && adminKey && adminKey.trim() === ADMIN_ACCESS_KEY) {
+    return next();
+  }
+
+  if (FIELD_CREW_KEY) {
+    if (fieldKey && fieldKey.trim() === FIELD_CREW_KEY) {
+      return next();
+    }
+    if (adminKey && adminKey.trim() === FIELD_CREW_KEY) {
+      return next();
+    }
+  }
+
+  return res.status(401).json({ detail: 'Unauthorized: Valid field crew or admin credentials required' });
 }
 
 // ─────────────────────── Domain Constants ───────────────────────
@@ -751,7 +772,7 @@ app.post('/api/incident', (req, res) => {
 });
 
 // Update incident status
-app.all(['/api/incident/:id/status'], (req, res) => {
+app.all(['/api/incident/:id/status'], verifyFieldOrAdmin, (req, res) => {
   const { id } = req.params;
   const { status, coordinator_name, resolution_notes } = req.body || {};
   const inc = incidents.find((i) => i._id === id);
@@ -782,7 +803,7 @@ app.all(['/api/incident/:id/status'], (req, res) => {
 });
 
 // Resolve an incident from Admin Dashboard or Field Terminal
-app.all(['/api/incident/:id/resolve'], (req, res) => {
+app.all(['/api/incident/:id/resolve'], verifyFieldOrAdmin, (req, res) => {
   const { id } = req.params;
   const { coordinator_name, resolution_notes } = req.body || {};
   const inc = incidents.find((i) => i._id === id);
