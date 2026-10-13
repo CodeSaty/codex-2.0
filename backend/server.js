@@ -676,11 +676,50 @@ app.post('/api/admin/clear_diversion/:id', verifyAdmin, (req, res) => {
   res.status(404).json({ detail: 'Diversion not found' });
 });
 
+// Throttle and divert zone crowd scans
+app.post('/api/admin/throttle_zone', verifyAdmin, (req, res) => {
+  const { zone_name, target_zone, count } = req.body || {};
+  if (!zone_name || !ZONES.includes(zone_name)) {
+    return res.status(400).json({ detail: 'Invalid zone' });
+  }
+
+  const otherZones = ZONES.filter((z) => z !== zone_name);
+  const target = target_zone && ZONES.includes(target_zone) ? target_zone : otherZones[Math.floor(Math.random() * otherZones.length)];
+  const limit = count || 150;
+
+  const tenMinsAgo = Date.now() - 10 * 60 * 1000;
+  let relieved = 0;
+
+  for (let i = zoneLogs.length - 1; i >= 0 && relieved < limit; i--) {
+    const l = zoneLogs[i];
+    if (l.zone_name === zone_name && new Date(l.timestamp).getTime() >= tenMinsAgo) {
+      l.zone_name = target;
+      relieved++;
+    }
+  }
+
+  if (relieved === 0) {
+    return res.json({ message: `No active attendees found in ${zone_name}.` });
+  }
+  return res.json({ message: `SUCCESS! Diverted ${relieved} attendees from ${zone_name} to ${target}.` });
+});
+
 // ─────────────────────── FEATURE 3: SOS & Incident Triage (God's Eye) ───────────────────────
+
+// Get all recent incidents
+app.get('/api/incidents', (req, res) => {
+  const formatted = incidents.slice(0, 50).map(inc => ({
+    ...inc,
+    status: (String(inc.status).toLowerCase() === 'resolved') ? 'Resolved' : 'Under Processing',
+    reported_at: inc.reported_at ? new Date(inc.reported_at).toISOString() : new Date().toISOString(),
+    resolved_at: inc.resolved_at ? new Date(inc.resolved_at).toISOString() : null,
+  }));
+  res.json({ incidents: formatted });
+});
 
 // Report emergency incident from scanner
 app.post('/api/incident', (req, res) => {
-  const { type, zone_name, notes } = req.body;
+  const { type, zone_name, notes, coordinator_name } = req.body;
   const validTypes = ['Medical', 'Security', 'Logistics'];
 
   if (!type || !validTypes.includes(type)) {
@@ -692,9 +731,12 @@ app.post('/api/incident', (req, res) => {
     type,
     zone_name: zone_name && ZONES.includes(zone_name) ? zone_name : 'Main Stage',
     notes: notes || `Urgent ${type} assistance requested at ${zone_name || 'Main Stage'}.`,
-    status: 'Active',
+    status: 'Under Processing',
+    coordinator_name: coordinator_name || 'Field Coordinator',
     reported_at: new Date(),
     resolved_at: null,
+    resolved_by: null,
+    resolution_notes: null,
   };
 
   incidents.unshift(incident);
@@ -708,31 +750,41 @@ app.post('/api/incident', (req, res) => {
   });
 });
 
-// Resolve an incident from Admin Dashboard
-app.patch('/api/incident/:id/resolve', verifyAdmin, (req, res) => {
+// Update incident status
+app.all(['/api/incident/:id/status'], (req, res) => {
   const { id } = req.params;
+  const { status, coordinator_name, resolution_notes } = req.body || {};
   const inc = incidents.find((i) => i._id === id);
 
   if (!inc) {
     return res.status(404).json({ detail: 'Incident not found' });
   }
 
-  inc.status = 'Resolved';
-  inc.resolved_at = new Date();
+  const isResolved = String(status).toLowerCase() === 'resolved';
+  inc.status = isResolved ? 'Resolved' : 'Under Processing';
+  if (isResolved) {
+    inc.resolved_at = new Date();
+    inc.resolved_by = coordinator_name || inc.coordinator_name || 'Coordinator';
+    if (resolution_notes) inc.resolution_notes = resolution_notes;
+  } else {
+    inc.resolved_at = null;
+    inc.resolved_by = null;
+  }
 
   res.json({
-    message: `${inc.type} incident resolved successfully`,
+    message: `Incident marked as ${inc.status}`,
     incident: {
       ...inc,
       reported_at: inc.reported_at.toISOString(),
-      resolved_at: inc.resolved_at.toISOString(),
+      resolved_at: inc.resolved_at ? inc.resolved_at.toISOString() : null,
     },
   });
 });
 
-// POST alias for resolve (for environments with restrictive PATCH handling)
-app.post('/api/incident/:id/resolve', verifyAdmin, (req, res) => {
+// Resolve an incident from Admin Dashboard or Field Terminal
+app.all(['/api/incident/:id/resolve'], (req, res) => {
   const { id } = req.params;
+  const { coordinator_name, resolution_notes } = req.body || {};
   const inc = incidents.find((i) => i._id === id);
 
   if (!inc) {
@@ -741,9 +793,11 @@ app.post('/api/incident/:id/resolve', verifyAdmin, (req, res) => {
 
   inc.status = 'Resolved';
   inc.resolved_at = new Date();
+  inc.resolved_by = coordinator_name || inc.coordinator_name || 'Coordinator';
+  if (resolution_notes) inc.resolution_notes = resolution_notes;
 
   res.json({
-    message: `${inc.type} incident resolved successfully`,
+    message: `${inc.type} incident resolved successfully by ${inc.resolved_by}`,
     incident: {
       ...inc,
       reported_at: inc.reported_at.toISOString(),
@@ -821,18 +875,28 @@ app.get('/api/admin/stats', verifyAdmin, (req, res) => {
     totalRevenue += tx.amount || 0;
   }
 
-  // Active and recent incidents
-  const activeIncidents = incidents
-    .filter((i) => i.status === 'Active')
+  // Active and recent incidents with coordinator status
+  const formattedIncidents = incidents
+    .slice(0, 50)
     .sort((a, b) => new Date(b.reported_at) - new Date(a.reported_at))
-    .map((i) => ({
-      id: i._id,
-      type: i.type,
-      zone_name: i.zone_name,
-      notes: i.notes,
-      status: i.status,
-      reported_at: new Date(i.reported_at).toISOString(),
-    }));
+    .map((i) => {
+      const isResolved = String(i.status).toLowerCase() === 'resolved';
+      return {
+        id: i._id,
+        type: i.type,
+        zone_name: i.zone_name,
+        notes: i.notes,
+        status: isResolved ? 'Resolved' : 'Under Processing',
+        coordinator_name: i.coordinator_name || 'Field Coordinator',
+        reported_at: new Date(i.reported_at).toISOString(),
+        resolved_at: i.resolved_at ? new Date(i.resolved_at).toISOString() : null,
+        resolved_by: i.resolved_by || null,
+        resolution_notes: i.resolution_notes || null,
+      };
+    });
+
+  const underProcessingCount = formattedIncidents.filter((i) => i.status === 'Under Processing').length;
+  const resolvedCount = formattedIncidents.filter((i) => i.status === 'Resolved').length;
 
   const activeDiversionsList = diversions
     .filter((d) => d.active)
@@ -874,7 +938,13 @@ app.get('/api/admin/stats', verifyAdmin, (req, res) => {
         timestamp: new Date(r.timestamp).toISOString(),
       })),
     },
-    active_incidents: activeIncidents,
+    incidents: formattedIncidents,
+    active_incidents: formattedIncidents,
+    incidents_summary: {
+      under_processing: underProcessingCount,
+      resolved: resolvedCount,
+      total: formattedIncidents.length,
+    },
     active_diversions: activeDiversionsList,
   });
 });

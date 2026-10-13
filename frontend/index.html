@@ -275,6 +275,18 @@
         </div>
       </div>
 
+      <!-- Live Emergency SOS Alert Banner -->
+      <div id="emergency-alert-banner" class="hidden px-4 py-3 bg-gradient-to-r from-rose-700 via-rose-600 to-rose-700 text-white text-xs font-bold flex items-center justify-between rounded-2xl mb-6 shadow-xl border border-rose-500">
+        <div class="flex items-center gap-2.5">
+          <span class="relative flex h-3 w-3 shrink-0">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+          </span>
+          <span id="emergency-alert-banner-text">🚨 EMERGENCY PING ACTIVE: Medical SOS at Cultural Pavilion! Ground field unit dispatched.</span>
+        </div>
+        <span class="text-[10px] uppercase font-mono px-2.5 py-1 rounded-lg bg-rose-900/90 text-rose-100 font-bold tracking-wider shrink-0">Field Dispatched</span>
+      </div>
+
       <!-- ───────────────────────────────────────────────────────────── -->
       <!-- 2. TOP-LEVEL FINANCIAL METRIC CARDS & REAL-TIME REVENUE -->
       <!-- ───────────────────────────────────────────────────────────── -->
@@ -544,16 +556,39 @@
           
           <!-- GOD'S EYE INCIDENT TRIAGE -->
           <div class="glass-card p-5 rounded-2xl border border-rose-200/80 shadow-md">
-            <div class="flex items-center justify-between mb-3 border-b border-stone-100 pb-3">
+            <div class="flex items-center justify-between mb-2.5 border-b border-stone-100 pb-2.5">
               <div class="flex items-center gap-2">
-                <i data-lucide="shield-alert" class="w-4 h-4 text-rose-600 animate-pulse"></i>
+                <span id="emergency-ping-beacon" class="relative flex h-2.5 w-2.5 hidden">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
+                </span>
+                <i data-lucide="shield-alert" class="w-4 h-4 text-rose-600"></i>
                 <span class="text-sm font-bold text-fest-dark">Incident Triage (SOS)</span>
               </div>
-              <span id="active-incident-badge" class="text-[10px] text-rose-700 font-bold bg-rose-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                0 ACTIVE
-              </span>
+              <div class="flex items-center gap-1.5">
+                <span id="active-incident-badge" class="text-[10px] text-amber-700 font-bold bg-amber-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  0 ACTIVE
+                </span>
+                <span id="resolved-incident-badge" class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  0 RESOLVED
+                </span>
+              </div>
             </div>
-            <div id="incidents-container" class="space-y-2.5 max-h-56 overflow-y-auto no-scrollbar">
+
+            <!-- Segmented status filter tabs -->
+            <div class="flex items-center gap-1 mb-2.5 p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl text-[10px] font-bold">
+              <button type="button" onclick="setIncidentFilter('all')" id="filter-all-btn" class="flex-1 py-1 rounded-lg text-center transition-colors bg-white dark:bg-stone-700 text-fest-dark dark:text-stone-100 shadow-xs cursor-pointer">
+                All (<span id="count-all-inc">0</span>)
+              </button>
+              <button type="button" onclick="setIncidentFilter('processing')" id="filter-proc-btn" class="flex-1 py-1 rounded-lg text-center transition-colors text-stone-500 hover:text-stone-800 cursor-pointer">
+                ⏳ Active (<span id="count-proc-inc">0</span>)
+              </button>
+              <button type="button" onclick="setIncidentFilter('resolved')" id="filter-res-btn" class="flex-1 py-1 rounded-lg text-center transition-colors text-stone-500 hover:text-stone-800 cursor-pointer">
+                ✅ Resolved (<span id="count-res-inc">0</span>)
+              </button>
+            </div>
+
+            <div id="incidents-container" class="space-y-2.5 max-h-64 overflow-y-auto no-scrollbar">
               <div class="p-4 text-center text-xs text-stone-400 font-medium">
                 No active emergency pings. All sectors nominal.
               </div>
@@ -902,6 +937,30 @@
           divEl.classList.add('hidden');
         }
       }
+
+      // Live Emergency Ping for this zone
+      const activeEmergency = (cachedIncidentsList || []).find(i => i.status !== 'Resolved' && i.zone_name === zone.name);
+      let emEl = document.getElementById(`zone-${zone.id}-emergency`);
+      if (!emEl) {
+        emEl = document.createElement('div');
+        emEl.id = `zone-${zone.id}-emergency`;
+        emEl.className = 'mt-2.5 p-2 rounded-xl bg-rose-100/90 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-[10px] font-semibold flex items-center justify-between shadow-xs';
+        card.appendChild(emEl);
+      }
+      if (activeEmergency) {
+        emEl.classList.remove('hidden');
+        emEl.innerHTML = `
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+            <span class="font-bold">🚨 ${escapeHTML(activeEmergency.type)} EMERGENCY PING</span>
+          </div>
+          <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200 font-mono font-bold">Field Unit Deployed</span>
+        `;
+        card.classList.add('ring-2', 'ring-rose-500');
+      } else {
+        emEl.classList.add('hidden');
+        card.classList.remove('ring-2', 'ring-rose-500');
+      }
     }
 
     // ─────────────────────── Top-level Financial Metrics Update ───────────────────────
@@ -1046,59 +1105,160 @@
       }
     };
 
-    function renderIncidents(incidents) {
-      const container = document.getElementById('incidents-container');
-      const badge = document.getElementById('active-incident-badge');
-      if (!container || !badge) return;
+    let currentIncidentFilter = 'all';
+    let cachedIncidentsList = [];
 
-      badge.textContent = incidents.length === 0 ? '0 ACTIVE' : `${incidents.length} ACTIVE`;
-      if (incidents.length === 0) {
-        badge.className = 'text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wider';
-        container.innerHTML = '<div class="p-4 text-center text-xs text-stone-400 font-medium">No active emergency pings. All sectors nominal.</div>';
+    window.setIncidentFilter = function(filter) {
+      currentIncidentFilter = filter;
+      const btnAll = document.getElementById('filter-all-btn');
+      const btnProc = document.getElementById('filter-proc-btn');
+      const btnRes = document.getElementById('filter-res-btn');
+      
+      const activeCls = 'flex-1 py-1 rounded-lg text-center transition-colors bg-white dark:bg-stone-700 text-fest-dark dark:text-stone-100 shadow-xs cursor-pointer';
+      const inactiveCls = 'flex-1 py-1 rounded-lg text-center transition-colors text-stone-500 hover:text-stone-800 cursor-pointer';
+
+      if (btnAll) btnAll.className = filter === 'all' ? activeCls : inactiveCls;
+      if (btnProc) btnProc.className = filter === 'processing' ? activeCls : inactiveCls;
+      if (btnRes) btnRes.className = filter === 'resolved' ? activeCls : inactiveCls;
+
+      renderFilteredIncidents();
+    };
+
+    function renderIncidents(incidents) {
+      cachedIncidentsList = incidents || [];
+      const activeBadge = document.getElementById('active-incident-badge');
+      const resolvedBadge = document.getElementById('resolved-incident-badge');
+      const countAll = document.getElementById('count-all-inc');
+      const countProc = document.getElementById('count-proc-inc');
+      const countRes = document.getElementById('count-res-inc');
+      const beacon = document.getElementById('emergency-ping-beacon');
+      const banner = document.getElementById('emergency-alert-banner');
+      const bannerText = document.getElementById('emergency-alert-banner-text');
+
+      const underProc = cachedIncidentsList.filter(i => i.status !== 'Resolved');
+      const resolved = cachedIncidentsList.filter(i => i.status === 'Resolved');
+
+      if (activeBadge) {
+        activeBadge.textContent = `${underProc.length} ACTIVE`;
+        activeBadge.className = underProc.length > 0
+          ? 'text-[10px] text-rose-700 font-bold bg-rose-100 px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse border border-rose-300'
+          : 'text-[10px] text-stone-500 font-bold bg-stone-100 px-2 py-0.5 rounded-full uppercase tracking-wider';
+      }
+      if (beacon) {
+        if (underProc.length > 0) beacon.classList.remove('hidden');
+        else beacon.classList.add('hidden');
+      }
+      if (banner && bannerText) {
+        if (underProc.length > 0) {
+          const first = underProc[0];
+          bannerText.textContent = `🚨 LIVE EMERGENCY PING: ${first.type} Emergency active at ${first.zone_name}! Ground field worker dispatched.`;
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+      if (resolvedBadge) {
+        resolvedBadge.textContent = `${resolved.length} RESOLVED`;
+        resolvedBadge.className = 'text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider';
+      }
+
+      if (countAll) countAll.textContent = cachedIncidentsList.length;
+      if (countProc) countProc.textContent = underProc.length;
+      if (countRes) countRes.textContent = resolved.length;
+
+      renderFilteredIncidents();
+      zonesData.forEach(renderZoneUI);
+    }
+
+    function renderFilteredIncidents() {
+      const container = document.getElementById('incidents-container');
+      if (!container) return;
+
+      let list = cachedIncidentsList;
+      if (currentIncidentFilter === 'processing') {
+        list = cachedIncidentsList.filter(i => i.status !== 'Resolved');
+      } else if (currentIncidentFilter === 'resolved') {
+        list = cachedIncidentsList.filter(i => i.status === 'Resolved');
+      }
+
+      if (list.length === 0) {
+        const msg = currentIncidentFilter === 'processing'
+          ? 'No emergencies under processing. All sectors nominal.'
+          : (currentIncidentFilter === 'resolved' ? 'No resolved emergencies recorded.' : 'No active emergency pings. All sectors nominal.');
+        container.innerHTML = `<div class="p-4 text-center text-xs text-stone-400 font-medium">${msg}</div>`;
         return;
       }
 
-      badge.className = 'text-[10px] text-rose-700 font-bold bg-rose-100 px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse';
-      const html = incidents.map(inc => {
+      const html = list.map(inc => {
+        const isResolved = (inc.status === 'Resolved');
         const isMed = inc.type === 'Medical';
         const isSec = inc.type === 'Security';
         const icon = isMed ? '🚨' : (isSec ? '👮' : '🛠️');
-        const borderCol = isMed 
-          ? 'border-rose-300 bg-rose-50/80 text-rose-900' 
-          : (isSec ? 'border-amber-300 bg-amber-50/80 text-amber-900' : 'border-sky-300 bg-sky-50/80 text-sky-900');
+
+        const cardStyle = isResolved
+          ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-stone-800'
+          : (isMed 
+              ? 'border-rose-300 dark:border-rose-900/70 bg-rose-50/80 dark:bg-rose-950/30 text-rose-950 shadow-xs' 
+              : (isSec ? 'border-amber-300 dark:border-amber-900/70 bg-amber-50/80 dark:bg-amber-950/30 text-amber-950 shadow-xs' : 'border-sky-300 dark:border-sky-900/70 bg-sky-50/80 dark:bg-sky-950/30 text-sky-950 shadow-xs'));
+
+        const statusTag = isResolved
+          ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80">✅ MARKED COMPLETE BY FIELD WORKER</span>`
+          : `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300/80">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+              </span>
+              ⏳ UNDER PROCESSING · EMERGENCY PING ACTIVE
+            </span>`;
+
         return `
-          <div class="p-3 rounded-xl border ${borderCol} flex items-start justify-between gap-3 text-xs shadow-sm">
-            <div class="flex-1">
-              <div class="flex items-center gap-1.5 font-bold mb-0.5">
+          <div class="p-3 rounded-xl border ${cardStyle} text-xs shadow-xs space-y-1.5">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-1.5 font-bold">
                 <span>${icon}</span>
                 <span>${escapeHTML(inc.type)} Emergency</span>
                 <span class="text-stone-500 font-normal">· ${escapeHTML(inc.zone_name)}</span>
               </div>
-              <p class="text-stone-700 text-[11px] leading-tight font-medium">${escapeHTML(inc.notes)}</p>
-              <span class="text-[10px] text-stone-400 mt-1 block">${timeAgo(inc.reported_at)}</span>
+              ${statusTag}
             </div>
-            <button onclick="resolveIncident('${inc.id}')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-sm whitespace-nowrap transition-colors">
-              RESOLVE
-            </button>
+
+            <p class="text-stone-700 dark:text-stone-300 text-[11px] leading-tight font-medium">${escapeHTML(inc.notes)}</p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-stone-200/50 dark:border-stone-800 text-[10px] text-stone-500">
+              <span>Reported: ${timeAgo(inc.reported_at)} ${inc.coordinator_name ? `· By ${escapeHTML(inc.coordinator_name)}` : ''}</span>
+              ${!isResolved ? `
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span> Field Worker Dispatched
+                  </span>
+                  <button onclick="resolveIncident(event)" class="px-2.5 py-1 bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-500 font-bold text-[10px] rounded-lg cursor-not-allowed uppercase shadow-none transition-none select-none" title="Admin view only: Field workers mark complete on site">
+                    RESOLVE
+                  </button>
+                </div>
+              ` : `
+                <span class="text-emerald-700 dark:text-emerald-400 font-semibold text-[11px] flex items-center gap-1">
+                  <i data-lucide="check-check" class="w-3.5 h-3.5"></i> Marked Complete by Field Worker: ${escapeHTML(inc.resolved_by || 'Coordinator')} ${inc.resolved_at ? `(${timeAgo(inc.resolved_at)})` : ''}
+                </span>
+              `}
+            </div>
+            ${isResolved && inc.resolution_notes ? `
+              <p class="text-[10px] italic text-emerald-800 dark:text-emerald-300/90 bg-emerald-100/50 dark:bg-emerald-950/40 p-1.5 rounded-md">Note: ${escapeHTML(inc.resolution_notes)}</p>
+            ` : ''}
           </div>
         `;
       }).join('');
+
       container.innerHTML = html;
       lucide.createIcons();
     }
 
-    window.resolveIncident = async function(id) {
-      try {
-        const res = await fetch(`/api/incident/${id}/resolve`, {
-          method: 'POST',
-          headers: { 'X-Admin-Key': window.currentAdminKey || '' }
-        });
-        if (res.ok) {
-          pollAdminStats();
-        }
-      } catch (e) {
-        console.error('Error resolving incident', e);
+    // Admin cannot mark complete; clicking resolve does nothing
+    window.resolveIncident = function(e) {
+      if (e) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
       }
+      return false;
     };
 
     let currentDiversionZone = 'Cultural Pavilion';
@@ -1424,12 +1584,13 @@
       document.body.appendChild(overlay);
 
       async function executeDiversion() {
+          const adminKey = window.currentAdminKey || sessionStorage.getItem('adminKey') || localStorage.getItem('adminKey') || 'TEST-KEY';
           try {
               const res = await fetch('/api/admin/throttle_zone', {
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
-                      'X-Admin-Key': window.currentAdminKey || ''
+                      'X-Admin-Key': adminKey
                   },
                   body: JSON.stringify({ 
                       zone_name: zoneName, 
@@ -1439,10 +1600,12 @@
               });
               if (res.ok) {
                   const data = await res.json();
-                  alert(data.message);
+                  alert(data.message || 'Diversion initiated successfully!');
                   pollAdminStats();
               } else {
-                  alert('Error initiating diversion.');
+                  const err = await res.json().catch(() => null);
+                  const msg = (err && (err.detail || err.message)) ? `Error: ${err.detail || err.message}` : 'Error initiating diversion.';
+                  alert(msg);
               }
           } catch (err) {
               alert('Diversion failed: Backend is unreachable.');

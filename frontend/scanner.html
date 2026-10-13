@@ -90,36 +90,56 @@
         <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
         <span class="hidden sm:inline">Badge Generator</span>
       </button>
-      <select id="station-zone-select" class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 text-xs rounded-xl px-3 py-1.5 font-bold focus:ring-2 focus:ring-rose-500 focus:outline-none shadow-sm">
-        <option value="Main Stage">Main Stage</option>
-        <option value="Food Court" selected>Food Court</option>
-        <option value="Artisan Market">Artisan Market</option>
-        <option value="Cultural Pavilion">Cultural Pavilion</option>
-        <option value="VIP Lounge">VIP Lounge</option>
-      </select>
+      <div class="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800/80 px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700">
+        <i data-lucide="map-pin" class="w-3 h-3 text-stone-400"></i>
+        <span class="text-[10px] uppercase font-bold text-stone-400 hidden sm:inline">Checkpoint:</span>
+        <select id="station-zone-select" class="bg-transparent text-stone-700 dark:text-stone-200 text-xs font-bold focus:outline-none cursor-pointer">
+          <option value="Main Stage">Main Stage</option>
+          <option value="Food Court" selected>Food Court</option>
+          <option value="Artisan Market">Artisan Market</option>
+          <option value="Cultural Pavilion">Cultural Pavilion</option>
+          <option value="VIP Lounge">VIP Lounge</option>
+        </select>
+      </div>
     </div>
   </header>
 
-  <!-- EMERGENCY SOS ACTION BAR (Persistent God's Eye Pings) -->
+  <!-- EMERGENCY SOS ACTION BAR -->
   <section class="px-4 pt-4 max-w-2xl w-full mx-auto z-10">
-    <div class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 dark:bg-rose-950/40 backdrop-blur-md">
+    <div class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 dark:bg-rose-950/40 backdrop-blur-md shadow-sm">
       <div class="flex items-center justify-between mb-2 px-1">
         <span class="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
           <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
           Emergency Incident Dispatch
         </span>
-        <span id="current-station-label" class="text-[10px] font-mono text-stone-400">Station: Food Court</span>
+        <span class="text-[10px] font-medium text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/50 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+          <i data-lucide="list" class="w-3 h-3"></i> Tap type to select area
+        </span>
       </div>
       <div class="grid grid-cols-3 gap-2">
-        <button type="button" onclick="triggerSOS('Medical')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all">
+        <button type="button" onclick="openEmergencyModal('Medical')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs shadow-md transition-all cursor-pointer">
           <span class="text-sm">🚨</span> Medical
         </button>
-        <button type="button" onclick="triggerSOS('Security')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all">
+        <button type="button" onclick="openEmergencyModal('Security')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs shadow-md transition-all cursor-pointer">
           <span class="text-sm">👮</span> Security
         </button>
-        <button type="button" onclick="triggerSOS('Logistics')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all">
+        <button type="button" onclick="openEmergencyModal('Logistics')" class="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-bold text-xs shadow-md transition-all cursor-pointer">
           <span class="text-sm">🛠️</span> Logistics
         </button>
+      </div>
+
+      <!-- Live Emergency Status Accordion for Field Coordinators -->
+      <div class="mt-3 pt-2.5 border-t border-rose-500/20">
+        <button type="button" onclick="toggleCoordinatorFeed()" class="w-full flex items-center justify-between text-[11px] font-bold text-stone-600 dark:text-stone-300 px-1 hover:text-stone-900 transition-colors cursor-pointer">
+          <span class="flex items-center gap-1.5">
+            <span id="coord-pulse-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Coordinator Live Feed (<span id="coord-incident-count">0 Active</span>)</span>
+          </span>
+          <span id="coord-toggle-arrow" class="text-[10px] text-stone-400 font-mono">▼ Show</span>
+        </button>
+        <div id="coord-incident-list" class="hidden mt-2 space-y-2 max-h-56 overflow-y-auto no-scrollbar">
+          <div class="p-3 text-center text-xs text-stone-400">Loading incidents...</div>
+        </div>
       </div>
     </div>
   </section>
@@ -478,6 +498,101 @@
         </button>
         <button type="button" onclick="closeSecurityAlertModal()" class="py-3 px-3 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 text-xs font-bold transition-all">
           Dismiss & Reset
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMERGENCY AREA SELECTION POPUP MODAL -->
+  <div id="emergency-area-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-white dark:bg-stone-900 rounded-3xl max-w-lg w-full border border-stone-200 dark:border-stone-800 shadow-2xl p-6 relative">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
+        <div class="flex items-center gap-3">
+          <div id="emergency-modal-icon-badge" class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm bg-rose-100 text-rose-600">
+            🚨
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 id="emergency-modal-title" class="text-base font-bold text-fest-dark dark:text-stone-100">
+                Dispatch Emergency
+              </h3>
+              <span id="emergency-modal-type-pill" class="text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
+                MEDICAL
+              </span>
+            </div>
+            <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              Select the area where help is required immediately.
+            </p>
+          </div>
+        </div>
+        <button type="button" onclick="closeEmergencyModal()" class="w-8 h-8 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-stone-600 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Area Selection List / Cards -->
+      <div class="mt-4">
+        <label class="block text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-2">
+          Select Area of Emergency
+        </label>
+        
+        <div id="emergency-area-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+          <!-- Area options rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Optional Specific Details / Description -->
+      <div class="mt-4">
+        <label class="block text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">
+          Incident Details / Description (Optional)
+        </label>
+        <input type="text" id="emergency-notes-input" placeholder="e.g. Near stall 4, fainting attendee, crowd rush..." class="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500">
+      </div>
+
+      <!-- Coordinator / Officer Info -->
+      <div class="mt-3 flex items-center gap-2">
+        <label class="text-[11px] font-bold text-stone-500 uppercase tracking-wider shrink-0">Reporter:</label>
+        <input type="text" id="emergency-coordinator-input" value="Field Coordinator" class="flex-1 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 text-xs font-mono">
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="mt-6 flex items-center gap-3">
+        <button type="button" onclick="closeEmergencyModal()" class="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors">
+          Cancel
+        </button>
+        <button type="button" id="emergency-submit-btn" onclick="submitEmergencyDispatch()" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+          <i data-lucide="radio" class="w-4 h-4"></i>
+          <span>DISPATCH NOW</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RESOLUTION MODAL FOR FIELD COORDINATOR -->
+  <div id="resolve-incident-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-white dark:bg-stone-900 rounded-3xl max-w-sm w-full border border-stone-200 dark:border-stone-800 shadow-2xl p-6 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="check-circle" class="w-6 h-6"></i>
+      </div>
+      <h3 class="text-base font-bold text-fest-dark dark:text-stone-100">Mark Emergency Complete</h3>
+      <p id="resolve-modal-subtitle" class="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-4">
+        Confirm that the emergency has been fully addressed and completed on the ground.
+      </p>
+      
+      <label class="block text-left text-xs font-bold text-stone-600 dark:text-stone-300 mb-1">Field Worker / Coordinator Name</label>
+      <input type="text" id="resolve-coordinator-name" placeholder="Worker / Coordinator Name" value="Field Worker Unit 1" class="w-full mb-2 p-2.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100">
+      <label class="block text-left text-xs font-bold text-stone-600 dark:text-stone-300 mb-1">Resolution Summary</label>
+      <textarea id="resolve-notes-input" placeholder="Resolution notes (e.g. First aid provided, area secured, nominal)" rows="2" class="w-full mb-4 p-2.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100"></textarea>
+
+      <div class="flex gap-2">
+        <button type="button" onclick="closeResolveModal()" class="flex-1 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 text-xs font-bold hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors">
+          Cancel
+        </button>
+        <button type="button" id="confirm-resolve-btn" onclick="confirmResolveIncident()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-sm flex items-center justify-center gap-1 transition-all">
+          <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Mark Complete
         </button>
       </div>
     </div>
@@ -1008,32 +1123,308 @@
       }
     }
 
-    // Emergency SOS Trigger
-    async function triggerSOS(type) {
-      const zone = document.getElementById('station-zone-select').value;
-      const reason = prompt(`Urgent ${type} SOS at ${zone}.\nEnter brief details (optional):`, `${type} required at ${zone}`);
-      if (reason === null) return;
+    // ─────────────────────── Emergency SOS & Coordinator Management ───────────────────────
+    let currentEmergencyType = 'Medical';
+    let selectedEmergencyArea = 'Main Stage';
+    let coordinatorIncidents = [];
+    let isCoordinatorFeedOpen = false;
+    let pendingResolveIncidentId = null;
+
+    const FESTIVAL_AREAS = [
+      { name: 'Main Stage', icon: '🎪', desc: 'Crowd Arena & Stage Front' },
+      { name: 'Food Court', icon: '🍔', desc: 'Food Stalls & Dining Courtyard' },
+      { name: 'Artisan Market', icon: '🛍️', desc: 'Craft Bazaar & Central Avenue' },
+      { name: 'Cultural Pavilion', icon: '🎭', desc: 'Workshops & Performance Dome' },
+      { name: 'VIP Lounge', icon: '🍸', desc: 'Hospitality Enclosure & Suites' },
+      { name: 'Main Entry Gate', icon: '🎟️', desc: 'Turnstiles & Security Check' },
+      { name: 'Parking & Campsite', icon: '🏕️', desc: 'Transit Hub & Outer Perimeter' }
+    ];
+
+    function openEmergencyModal(type) {
+      currentEmergencyType = type || 'Medical';
+      selectedEmergencyArea = FESTIVAL_AREAS[0].name;
+
+      const modal = document.getElementById('emergency-area-modal');
+      const title = document.getElementById('emergency-modal-title');
+      const pill = document.getElementById('emergency-modal-type-pill');
+      const badge = document.getElementById('emergency-modal-icon-badge');
+      const submitBtn = document.getElementById('emergency-submit-btn');
+      const notesInput = document.getElementById('emergency-notes-input');
+
+      notesInput.value = '';
+
+      if (type === 'Medical') {
+        title.textContent = 'Dispatch Medical Emergency';
+        pill.textContent = 'MEDICAL';
+        pill.className = 'text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-rose-100 text-rose-700';
+        badge.innerHTML = '🚨';
+        badge.className = 'w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm bg-rose-100 text-rose-600';
+        submitBtn.className = 'flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer';
+      } else if (type === 'Security') {
+        title.textContent = 'Dispatch Security Emergency';
+        pill.textContent = 'SECURITY';
+        pill.className = 'text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-amber-100 text-amber-700';
+        badge.innerHTML = '👮';
+        badge.className = 'w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm bg-amber-100 text-amber-600';
+        submitBtn.className = 'flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer';
+      } else {
+        title.textContent = 'Dispatch Logistics Emergency';
+        pill.textContent = 'LOGISTICS';
+        pill.className = 'text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-sky-100 text-sky-700';
+        badge.innerHTML = '🛠️';
+        badge.className = 'w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm bg-sky-100 text-sky-600';
+        submitBtn.className = 'flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer';
+      }
+
+      renderEmergencyAreaList();
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeEmergencyModal() {
+      document.getElementById('emergency-area-modal').classList.add('hidden');
+    }
+
+    function renderEmergencyAreaList() {
+      const container = document.getElementById('emergency-area-list');
+      container.innerHTML = FESTIVAL_AREAS.map(a => {
+        const isSelected = (a.name === selectedEmergencyArea);
+        const activeStyle = isSelected
+          ? 'border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 ring-2 ring-rose-500/20 text-rose-900 dark:text-rose-100 font-bold'
+          : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-850 hover:border-stone-300 dark:hover:border-stone-600 text-stone-700 dark:text-stone-300';
+        
+        return `
+          <button type="button" onclick="selectEmergencyArea('${escapeHTML(a.name)}')" class="p-2.5 rounded-2xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${activeStyle}">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-lg">${a.icon}</span>
+              <div class="truncate">
+                <p class="text-xs font-bold leading-tight truncate">${escapeHTML(a.name)}</p>
+                <p class="text-[10px] text-stone-400 dark:text-stone-500 truncate">${escapeHTML(a.desc)}</p>
+              </div>
+            </div>
+            <div class="w-4 h-4 rounded-full border ${isSelected ? 'border-rose-600 bg-rose-600 flex items-center justify-center text-white' : 'border-stone-300 dark:border-stone-600'} shrink-0 text-[10px]">
+              ${isSelected ? '✓' : ''}
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectEmergencyArea(areaName) {
+      selectedEmergencyArea = areaName;
+      renderEmergencyAreaList();
+    }
+
+    async function submitEmergencyDispatch() {
+      const notes = document.getElementById('emergency-notes-input').value.trim();
+      const coordName = document.getElementById('emergency-coordinator-input').value.trim() || 'Field Coordinator';
+      const btn = document.getElementById('emergency-submit-btn');
+      const origText = btn.innerHTML;
+
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Dispatching...`;
+      lucide.createIcons();
 
       try {
         const res = await fetch('/api/incident', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: type,
-            zone_name: zone,
-            notes: reason || `${type} emergency reported at ${zone}.`
+            type: currentEmergencyType,
+            zone_name: selectedEmergencyArea,
+            notes: notes || `${currentEmergencyType} emergency reported at ${selectedEmergencyArea}.`,
+            coordinator_name: coordName
           })
         });
 
         if (res.ok) {
-          showToast(`🚨 DISPATCHED: ${type} SOS broadcast to Command Center for ${zone}!`);
+          playWarningAlarm();
+          showToast(`🚨 DISPATCHED: ${currentEmergencyType} SOS broadcast for ${selectedEmergencyArea}!`);
+          closeEmergencyModal();
+          
+          // Auto-open coordinator feed so the live ping is immediately visible!
+          isCoordinatorFeedOpen = true;
+          const listEl = document.getElementById('coord-incident-list');
+          const arrowEl = document.getElementById('coord-toggle-arrow');
+          if (listEl) listEl.classList.remove('hidden');
+          if (arrowEl) arrowEl.textContent = '▲ Hide';
+
+          fetchCoordinatorIncidents();
         } else {
-          showToast(`Failed to log emergency incident.`, true);
+          showToast(`❌ Failed to log emergency incident.`, true);
         }
       } catch (e) {
-        showToast('Network error triggering SOS.', true);
+        showToast('❌ Network error dispatching emergency.', true);
+      } finally {
+        btn.innerHTML = origText;
+        lucide.createIcons();
       }
     }
+
+    // Alias for backward compatibility
+    window.triggerSOS = function(type) {
+      openEmergencyModal(type);
+    };
+
+    // ─────────────────────── Coordinator Live Incidents Feed ───────────────────────
+    function toggleCoordinatorFeed() {
+      isCoordinatorFeedOpen = !isCoordinatorFeedOpen;
+      const listEl = document.getElementById('coord-incident-list');
+      const arrowEl = document.getElementById('coord-toggle-arrow');
+      if (isCoordinatorFeedOpen) {
+        listEl.classList.remove('hidden');
+        arrowEl.textContent = '▲ Hide';
+        fetchCoordinatorIncidents();
+      } else {
+        listEl.classList.add('hidden');
+        arrowEl.textContent = '▼ Show';
+      }
+    }
+
+    async function fetchCoordinatorIncidents() {
+      try {
+        const res = await fetch('/api/incidents');
+        if (res.ok) {
+          const data = await res.json();
+          coordinatorIncidents = data.incidents || [];
+          renderCoordinatorIncidents(coordinatorIncidents);
+        }
+      } catch (e) {
+        console.warn('Could not refresh coordinator incidents', e);
+      }
+    }
+
+    function renderCoordinatorIncidents(incidents) {
+      const countEl = document.getElementById('coord-incident-count');
+      const listEl = document.getElementById('coord-incident-list');
+      const dotEl = document.getElementById('coord-pulse-dot');
+      if (!countEl || !listEl) return;
+
+      const underProcessing = incidents.filter(i => i.status === 'Under Processing');
+      countEl.textContent = underProcessing.length > 0 ? `${underProcessing.length} Active` : 'All Clear';
+
+      if (underProcessing.length > 0) {
+        dotEl.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
+      } else {
+        dotEl.className = 'w-2 h-2 rounded-full bg-emerald-500';
+      }
+
+      if (incidents.length === 0) {
+        listEl.innerHTML = '<div class="p-3 text-center text-xs text-stone-400">No emergency incidents reported. All festival areas nominal.</div>';
+        return;
+      }
+
+      listEl.innerHTML = incidents.map(inc => {
+        const isResolved = (inc.status === 'Resolved');
+        const icon = inc.type === 'Medical' ? '🚨' : (inc.type === 'Security' ? '👮' : '🛠️');
+        const statusBadge = isResolved
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✅ Completed</span>`
+          : `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 animate-pulse border border-rose-300 dark:border-rose-800">
+               <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+               ⏳ Under Processing
+             </span>`;
+
+        return `
+          <div class="p-2.5 rounded-xl border ${isResolved ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20' : 'border-rose-300 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/40 shadow-xs'} text-xs">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-1.5 font-bold text-fest-dark dark:text-stone-100">
+                <span>${icon}</span>
+                <span>${escapeHTML(inc.type)}</span>
+                <span class="text-stone-500 dark:text-stone-400 font-normal">· ${escapeHTML(inc.zone_name)}</span>
+              </div>
+              ${statusBadge}
+            </div>
+            <p class="text-[11px] text-stone-600 dark:text-stone-300 leading-tight mb-1.5">${escapeHTML(inc.notes || '')}</p>
+            <div class="flex items-center justify-between text-[10px] text-stone-400 pt-1 border-t border-stone-200/50 dark:border-stone-800">
+              <span>Reported: ${timeAgo(inc.reported_at)} ${inc.coordinator_name ? `(${escapeHTML(inc.coordinator_name)})` : ''}</span>
+              ${!isResolved ? `
+                <button type="button" onclick="openResolveModal('${inc.id}', '${escapeHTML(inc.zone_name)}', '${escapeHTML(inc.type)}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[10px] transition-all cursor-pointer shadow-sm flex items-center gap-1">
+                  <i data-lucide="check-circle-2" class="w-3 h-3"></i> Mark Complete
+                </button>
+              ` : `
+                <span class="text-emerald-600 dark:text-emerald-400 font-medium">✅ By: ${escapeHTML(inc.resolved_by || 'Field Worker')}</span>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function openResolveModal(id, zone, type) {
+      pendingResolveIncidentId = id;
+      document.getElementById('resolve-modal-subtitle').textContent = `Confirm resolution for ${type} Emergency at ${zone}.`;
+      document.getElementById('resolve-notes-input').value = '';
+      document.getElementById('resolve-incident-modal').classList.remove('hidden');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeResolveModal() {
+      pendingResolveIncidentId = null;
+      document.getElementById('resolve-incident-modal').classList.add('hidden');
+    }
+
+    async function confirmResolveIncident() {
+      if (!pendingResolveIncidentId) return;
+      const coordName = document.getElementById('resolve-coordinator-name').value.trim() || 'Field Worker';
+      const notes = document.getElementById('resolve-notes-input').value.trim() || 'Resolved on-site by field worker';
+      const btn = document.getElementById('confirm-resolve-btn');
+      const origText = btn.innerHTML;
+
+      btn.innerHTML = `<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Saving...`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      try {
+        const res = await fetch(`/api/incident/${pendingResolveIncidentId}/resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            coordinator_name: coordName,
+            resolution_notes: notes,
+            status: 'Resolved'
+          })
+        });
+
+        if (res.ok) {
+          showToast(`✅ Emergency marked COMPLETE by ${coordName}!`);
+          closeResolveModal();
+          fetchCoordinatorIncidents();
+        } else {
+          showToast('❌ Failed to update incident status.', true);
+        }
+      } catch (e) {
+        showToast('❌ Network error marking incident complete.', true);
+      } finally {
+        btn.innerHTML = origText;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
+    }
+
+    function timeAgo(dateString) {
+      if (!dateString) return 'Just now';
+      const sec = Math.floor((new Date() - new Date(dateString)) / 1000);
+      if (sec < 60) return `${sec}s ago`;
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      const hr = Math.floor(min / 60);
+      return `${hr}h ago`;
+    }
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Auto-poll coordinator feed every 4s
+    setInterval(() => {
+      fetchCoordinatorIncidents();
+    }, 4000);
+    // Initial fetch
+    fetchCoordinatorIncidents();
   </script>
   <script src="/nlp-assistant.js"></script>
 </body>

@@ -1,6 +1,8 @@
 import os
 import secrets
 import asyncio
+import time
+import copy
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 import logging
@@ -42,6 +44,15 @@ class DatabaseManager:
         self.mem_incidents: List[Dict[str, Any]] = []
         self.mem_diversions: List[Dict[str, Any]] = []
         self.mem_recharges: List[Dict[str, Any]] = []
+
+        # High-performance telemetry caching for instant 3s polling roundtrips
+        self._stats_cache: Optional[Dict[str, Any]] = None
+        self._stats_cache_time: float = 0.0
+        self._stats_cache_ttl: float = 1.5
+
+    def invalidate_admin_stats_cache(self):
+        self._stats_cache = None
+        self._stats_cache_time = 0.0
 
     async def connect(self):
         """Attempts to connect to MongoDB Atlas if URI is provided, else activates in-memory fallback."""
@@ -539,38 +550,87 @@ class DatabaseManager:
         return recharges_list, summary
 
     # ─────────────────────── Incidents ───────────────────────
-    async def create_incident(self, incident_type: str, zone_name: str, notes: str) -> Dict[str, Any]:
+    async def create_incident(self, incident_type: str, zone_name: str, notes: str, coordinator_name: str = "Field Coordinator") -> Dict[str, Any]:
         incident = {
             '_id': generate_id(),
             'type': incident_type,
             'zone_name': zone_name if zone_name in ZONES else 'Main Stage',
             'notes': notes or f"Urgent {incident_type} assistance reported at {zone_name}.",
-            'status': 'Active',
+            'status': 'Under Processing',
+            'coordinator_name': coordinator_name or "Field Coordinator",
             'reported_at': datetime.now(timezone.utc).isoformat(),
             'resolved_at': None,
+            'resolved_by': None,
+            'resolution_notes': None,
         }
         self.mem_incidents.insert(0, incident)
         if self.is_connected_to_atlas and self.db is not None:
             await self.db.incidents.insert_one(incident)
+        self.invalidate_admin_stats_cache()
         return incident
 
-    async def resolve_incident(self, incident_id: str) -> Optional[Dict[str, Any]]:
+    async def resolve_incident(self, incident_id: str, coordinator_name: Optional[str] = None, resolution_notes: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        return await self.update_incident_status(incident_id, "Resolved", coordinator_name, resolution_notes)
+
+    async def update_incident_status(self, incident_id: str, new_status: str, coordinator_name: Optional[str] = None, resolution_notes: Optional[str] = None) -> Optional[Dict[str, Any]]:
         now_iso = datetime.now(timezone.utc).isoformat()
+        is_resolved = (str(new_status).lower() == 'resolved')
+        status_str = 'Resolved' if is_resolved else 'Under Processing'
+
         found = None
         for inc in self.mem_incidents:
             if inc.get('_id') == incident_id:
-                inc['status'] = 'Resolved'
-                inc['resolved_at'] = now_iso
+                inc['status'] = status_str
+                if is_resolved:
+                    inc['resolved_at'] = now_iso
+                    inc['resolved_by'] = coordinator_name or inc.get('coordinator_name') or 'Coordinator'
+                    if resolution_notes:
+                        inc['resolution_notes'] = resolution_notes
+                else:
+                    inc['resolved_at'] = None
+                    inc['resolved_by'] = None
                 found = inc
                 break
 
         if self.is_connected_to_atlas and self.db is not None:
+            update_data: Dict[str, Any] = {
+                "status": status_str,
+                "resolved_at": now_iso if is_resolved else None,
+                "resolved_by": (coordinator_name or "Coordinator") if is_resolved else None,
+            }
+            if resolution_notes:
+                update_data["resolution_notes"] = resolution_notes
             await self.db.incidents.update_one(
                 {"_id": incident_id},
-                {"$set": {"status": "Resolved", "resolved_at": now_iso}}
+                {"$set": update_data}
             )
             found = await self.db.incidents.find_one({"_id": incident_id})
+
+        self.invalidate_admin_stats_cache()
         return found
+
+    async def list_recent_incidents(self, limit: int = 50) -> List[Dict[str, Any]]:
+        if self.is_connected_to_atlas and self.db is not None:
+            raw = await self.db.incidents.find().sort("reported_at", -1).to_list(length=limit)
+        else:
+            raw = self.mem_incidents[:limit]
+
+        results = []
+        for i in sorted(raw, key=lambda x: str(x.get('reported_at', '')), reverse=True):
+            status = 'Resolved' if str(i.get('status', '')).lower() == 'resolved' else 'Under Processing'
+            results.append({
+                'id': str(i.get('_id', '')),
+                'type': i.get('type', 'Medical'),
+                'zone_name': i.get('zone_name', 'Main Stage'),
+                'notes': i.get('notes', ''),
+                'status': status,
+                'coordinator_name': i.get('coordinator_name', 'Field Coordinator'),
+                'reported_at': i.get('reported_at'),
+                'resolved_at': i.get('resolved_at'),
+                'resolved_by': i.get('resolved_by'),
+                'resolution_notes': i.get('resolution_notes'),
+            })
+        return results
 
     # ─────────────────────── Diversions ───────────────────────
     async def trigger_diversion(self, zone_name: str, target_zone: str, message: str) -> Tuple[Dict[str, Any], int]:
@@ -634,25 +694,33 @@ class DatabaseManager:
                     {"_id": {"$in": ids_to_update}},
                     {"$set": {"zone_name": to_zone}}
                 )
+        self.invalidate_admin_stats_cache()
         return relieved
 
     # ─────────────────────── Aggregations & Admin Stats ───────────────────────
     async def get_admin_stats(self) -> Dict[str, Any]:
+        now_ts = time.time()
+        if self._stats_cache is not None and (now_ts - self._stats_cache_time) < self._stats_cache_ttl:
+            return copy.deepcopy(self._stats_cache)
+
         ten_mins_ago = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
 
         if self.is_connected_to_atlas and self.db is not None:
-            all_attendees = await self.db.attendees.find().to_list(length=1000)
-            all_logs = await self.db.zone_logs.find().to_list(length=5000)
-            all_txs = await self.db.transactions.find().to_list(length=1000)
-            all_recharges = await self.db.recharges.find().to_list(length=1000)
-            active_inc = await self.db.incidents.find({"status": "Active"}).sort("reported_at", -1).to_list(length=50)
-            active_divs = await self.db.diversions.find({"active": True}).to_list(length=20)
+            # Parallel query execution across WAN to minimize Atlas latency by 10x
+            all_attendees, all_logs, all_txs, all_recharges, all_incidents, active_divs = await asyncio.gather(
+                self.db.attendees.find({}, {"_id": 1, "name": 1, "engagement_score": 1}).to_list(length=1000),
+                self.db.zone_logs.find({}, {"zone_name": 1, "timestamp": 1, "attendee_id": 1, "role": 1}).to_list(length=5000),
+                self.db.transactions.find({}, {"_id": 1, "amount": 1, "attendee_name": 1, "stall_name": 1, "zone_name": 1, "timestamp": 1}).to_list(length=1000),
+                self.db.recharges.find({}, {"_id": 1, "inr_amount": 1, "coins_added": 1, "attendee_name": 1, "payment_method": 1, "operator_mode": 1, "timestamp": 1, "payment_ref": 1}).to_list(length=1000),
+                self.db.incidents.find().sort("reported_at", -1).to_list(length=50),
+                self.db.diversions.find({"active": True}).to_list(length=20)
+            )
         else:
             all_attendees = list(self.mem_attendees.values())
             all_logs = self.mem_zone_logs
             all_txs = self.mem_transactions
             all_recharges = self.mem_recharges
-            active_inc = [i for i in self.mem_incidents if i.get('status') == 'Active']
+            all_incidents = self.mem_incidents
             active_divs = [d for d in self.mem_diversions if d.get('active')]
 
         total_attendees = len(all_attendees)
@@ -725,17 +793,24 @@ class DatabaseManager:
             for r in sorted(all_recharges, key=lambda x: x.get('timestamp', ''), reverse=True)[:10]
         ]
 
-        formatted_incidents = [
-            {
-                'id': i.get('_id'),
-                'type': i.get('type'),
-                'zone_name': i.get('zone_name'),
-                'notes': i.get('notes'),
-                'status': i.get('status'),
+        formatted_incidents = []
+        for i in sorted(all_incidents, key=lambda x: str(x.get('reported_at', '')), reverse=True):
+            status = 'Resolved' if str(i.get('status', '')).lower() == 'resolved' else 'Under Processing'
+            formatted_incidents.append({
+                'id': str(i.get('_id', '')),
+                'type': i.get('type', 'Medical'),
+                'zone_name': i.get('zone_name', 'Main Stage'),
+                'notes': i.get('notes', ''),
+                'status': status,
+                'coordinator_name': i.get('coordinator_name', 'Field Coordinator'),
                 'reported_at': i.get('reported_at'),
-            }
-            for i in sorted(active_inc, key=lambda x: x.get('reported_at', ''), reverse=True)
-        ]
+                'resolved_at': i.get('resolved_at'),
+                'resolved_by': i.get('resolved_by'),
+                'resolution_notes': i.get('resolution_notes'),
+            })
+
+        under_processing_count = sum(1 for inc in formatted_incidents if inc['status'] == 'Under Processing')
+        resolved_count = sum(1 for inc in formatted_incidents if inc['status'] == 'Resolved')
 
         formatted_diversions = [
             {
@@ -748,7 +823,7 @@ class DatabaseManager:
             for d in active_divs
         ]
 
-        return {
+        result = {
             'zones': zones_stats,
             'recent_logs': recent_10,
             'total_attendees': total_attendees,
@@ -763,9 +838,20 @@ class DatabaseManager:
                 'recent_transactions': recent_txs,
                 'recent_recharges': recent_recharges,
             },
+            'incidents': formatted_incidents,
             'active_incidents': formatted_incidents,
+            'incidents_summary': {
+                'under_processing': under_processing_count,
+                'resolved': resolved_count,
+                'total': len(formatted_incidents)
+            },
             'active_diversions': formatted_diversions,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
         }
+
+        self._stats_cache = copy.deepcopy(result)
+        self._stats_cache_time = time.time()
+        return result
 
     # ─────────────────────── Attendee Unified History ───────────────────────
     async def get_attendee_history(self, attendee_id: str) -> Optional[Dict[str, Any]]:

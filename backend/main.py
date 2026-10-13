@@ -32,7 +32,7 @@ from models import (
     TransactionRequest, TransactionResponse,
     SocialPost, FrictionAlert,
     RechargeRequest, RechargeResponse, RechargesListResponse,
-    IncidentCreate, IncidentResponse,
+    IncidentCreate, IncidentStatusUpdate, IncidentResponse,
     DiversionCreate, DiversionResponse, ThrottleRequest,
     NLPQueryRequest, NLPQueryResponse, MetricItem, QuickActionItem,
     AdminStatsResponse, AttendeeHistoryResponse, HealthCheckResponse
@@ -921,6 +921,11 @@ async def clear_friction_alert(is_admin: bool = Depends(verify_admin)):
     }
 
 # ─────────────────────── Emergency Incidents (God's Eye) ───────────────────────
+@app.get("/api/incidents", tags=["Incidents"])
+async def list_incidents():
+    incidents = await db_manager.list_recent_incidents()
+    return {"incidents": incidents}
+
 @app.post("/api/incident", status_code=status.HTTP_201_CREATED, tags=["Incidents"])
 async def report_incident(payload: IncidentCreate):
     valid_types = ["Medical", "Security", "Logistics"]
@@ -930,21 +935,44 @@ async def report_incident(payload: IncidentCreate):
     incident = await db_manager.create_incident(
         incident_type=payload.type,
         zone_name=payload.zone_name or "Main Stage",
-        notes=payload.notes or ""
+        notes=payload.notes or "",
+        coordinator_name=payload.coordinator_name or "Field Coordinator"
     )
     return {
         "message": f"🚨 Emergency {payload.type} incident logged at {incident['zone_name']}!",
         "incident": incident
     }
 
+@app.patch("/api/incident/{incident_id}/status", tags=["Incidents"])
+@app.post("/api/incident/{incident_id}/status", tags=["Incidents"])
+async def update_incident_status_endpoint(incident_id: str, payload: IncidentStatusUpdate):
+    updated = await db_manager.update_incident_status(
+        incident_id,
+        payload.status,
+        payload.coordinator_name,
+        payload.resolution_notes
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return {
+        "message": f"Incident marked as {updated['status']}",
+        "incident": updated
+    }
+
 @app.patch("/api/incident/{incident_id}/resolve", tags=["Incidents"])
 @app.post("/api/incident/{incident_id}/resolve", tags=["Incidents"])
-async def resolve_incident_endpoint(incident_id: str, is_admin: bool = Depends(verify_admin)):
-    resolved = await db_manager.resolve_incident(incident_id)
+async def resolve_incident_endpoint(
+    incident_id: str,
+    payload: Optional[IncidentStatusUpdate] = None,
+    coordinator: Optional[str] = None
+):
+    coord_name = (payload and payload.coordinator_name) or coordinator or "Zone Coordinator"
+    res_notes = (payload and payload.resolution_notes) or None
+    resolved = await db_manager.resolve_incident(incident_id, coordinator_name=coord_name, resolution_notes=res_notes)
     if not resolved:
         raise HTTPException(status_code=404, detail="Incident not found")
     return {
-        "message": f"{resolved['type']} incident resolved successfully",
+        "message": f"{resolved['type']} incident marked resolved by {resolved.get('resolved_by', 'Coordinator')}",
         "incident": resolved
     }
 

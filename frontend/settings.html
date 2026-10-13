@@ -202,6 +202,12 @@
   <script>
     const ZONES = ["Main Stage", "Food Court", "Artisan Market", "Cultural Pavilion", "VIP Lounge"];
     
+    function getAdminKey() {
+      const keyInput = document.getElementById('admin-key-input');
+      const val = keyInput ? keyInput.value.trim() : '';
+      return val || sessionStorage.getItem('adminKey') || localStorage.getItem('adminKey') || 'TEST-KEY';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       
@@ -209,24 +215,28 @@
       const mongoInput = document.getElementById('mongo-uri-input');
       const weatherInput = document.getElementById('weather-api-input');
 
-      keyInput.value = sessionStorage.getItem('adminKey') || localStorage.getItem('adminKey') || '';
+      const savedKey = sessionStorage.getItem('adminKey') || localStorage.getItem('adminKey') || 'TEST-KEY';
+      keyInput.value = savedKey;
+      sessionStorage.setItem('adminKey', savedKey);
+      localStorage.setItem('adminKey', savedKey);
+      
       // Never persist the MongoDB URI in browser storage; purge any legacy copy.
       localStorage.removeItem('mongoUri');
-      localStorage.removeItem('adminKey');
       weatherInput.value = localStorage.getItem('weatherKey') || '';
       
       document.getElementById('save-settings-btn').addEventListener('click', async () => {
         const btn = document.getElementById('save-settings-btn');
         btn.textContent = "Saving...";
-        sessionStorage.setItem('adminKey', keyInput.value);
-        localStorage.removeItem('adminKey');
+        const key = keyInput.value.trim() || 'TEST-KEY';
+        sessionStorage.setItem('adminKey', key);
+        localStorage.setItem('adminKey', key);
         localStorage.setItem('weatherKey', weatherInput.value);
         
         if (mongoInput.value) {
             try {
                 const res = await fetch('/api/admin/config', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': keyInput.value },
+                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
                     body: JSON.stringify({ mongo_uri: mongoInput.value })
                 });
                 if (res.ok) {
@@ -325,21 +335,24 @@
       document.body.appendChild(overlay);
 
       async function executeDiversion() {
+          const adminKey = getAdminKey();
           try {
               const res = await fetch('/api/admin/throttle_zone', {
                   method: 'POST',
                   headers: { 
                       'Content-Type': 'application/json',
-                      'X-Admin-Key': localStorage.getItem('adminKey') || ''
+                      'X-Admin-Key': adminKey
                   },
                   body: JSON.stringify({ zone_name: zoneName, target_zone: selectedZone })
               });
               if (res.ok) {
                   const data = await res.json();
-                  alert(data.message);
+                  alert(data.message || 'Diversion protocol initiated successfully.');
                   if (typeof window.fetchData === 'function') window.fetchData();
               } else {
-                  alert('Error initiating diversion.');
+                  const err = await res.json().catch(() => null);
+                  const msg = (err && (err.detail || err.message)) ? `Error: ${err.detail || err.message}` : 'Error initiating diversion.';
+                  alert(msg);
               }
           } catch (err) {
               alert('Diversion failed: Backend is unreachable.');
@@ -359,7 +372,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Key': localStorage.getItem('adminKey') || ''
+            'X-Admin-Key': getAdminKey()
           },
           body: JSON.stringify({ query: query })
         });

@@ -124,6 +124,12 @@ class IncidentCreate(BaseModel):
     type: str = Field(..., description="Medical, Security, or Logistics", example="Medical")
     zone_name: Optional[str] = Field("Main Stage", description="Festival zone", example="Cultural Pavilion")
     notes: Optional[str] = Field(None, description="Specific incident notes", example="Heat exhaustion near gate 2")
+    coordinator_name: Optional[str] = Field("Field Coordinator", description="Reporting coordinator or dispatch unit")
+
+class IncidentStatusUpdate(BaseModel):
+    status: str = Field(..., description="Under Processing or Resolved")
+    coordinator_name: Optional[str] = Field(None, description="Coordinator handling or resolving the incident")
+    resolution_notes: Optional[str] = Field(None, description="Notes on resolution steps taken")
 
 class IncidentResponse(BaseModel):
     message: str
